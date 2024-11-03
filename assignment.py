@@ -134,6 +134,7 @@ def solve_question_1(pi_0: dict[int, float], n: int) -> dict[int, float]:
         
     return pi_n
 
+import math
 
 def solve_question_2(n: int, T: int, S_0: int, c: float) -> float:
     """Finite-horizon Markov decision process.
@@ -147,7 +148,44 @@ def solve_question_2(n: int, T: int, S_0: int, c: float) -> float:
     Returns:
         Total expected revenue under an optimal policy.
     """
-    raise NotImplementedError
+    S = [S_0 + i for i in range(T + 1)]
+    
+    # Initialize V_T with precomputed values
+    V_T = {i: S[-1] * i * 0.5 for i in range(2 * n + 1)}
+
+    def binomial(i, n):
+        return math.comb(n, i) * 0.5**i * (1 - 0.5)**(n - i)
+
+    def reward(a, S_t, c, n):
+        return sum(binomial(i, n) * (S_t * min(a, i) - c * max(0, a - i)) for i in range(n + 1))
+
+    # Find optimal policy at each time step
+    def find_optimal_policy(n, t, S, V_t):
+        S_t = S[t]
+        V_t_1 = {}
+        
+        # Calculate Q(s, a) values with optimized summing
+        for s in range(2 * n + 1):
+            Q = {}
+            for a in range(s + 1):
+                # print(sum_prob)
+                Q[a] = reward(a, S_t, c, n) + sum(
+                    binomial(j, n) * V_t[s - j]
+                    for j in range(min(a + 1, n + 1))
+                )
+                if a < n:
+                    Q[a] += sum(
+                    binomial(j, n) * V_t[s - a]
+                    for j in range(a + 1, n + 1)
+                )
+            V_t_1[s] = max(Q.values())
+        return V_t_1
+
+    # Backward induction to update V_T
+    for t in range(T - 1, -1, -1):
+        V_T = find_optimal_policy(n, t, S, V_T)
+
+    return V_T[2 * n]
 
 
 def solve_question_3(N: int, alpha: float, beta: float) -> float:
@@ -161,7 +199,64 @@ def solve_question_3(N: int, alpha: float, beta: float) -> float:
     Returns:
         Total expected reward under an optimal policy.
     """
-    raise NotImplementedError
+        # Initialize the value matrix for each state
+    V = init_matrix(nrows=N, ncols=N, fill_value=0)
+    
+    # Define the rewards based on the state
+    def reward(s):
+        if s == (N - 1, N - 1):
+            return 1
+        elif s == (N // 2, N // 2):
+            return -alpha
+        elif s == (N - 1, 0):
+            return -beta
+        else:
+            return 0
+
+    # Set discount factor
+    gamma = 0.5
+
+    # Iterative value update until convergence
+    delta = float('inf')
+    while delta > 1e-6:
+        delta = 0
+        for i in range(N):
+            for j in range(N):
+                current_state = (i, j)
+                current_value = V[i][j]
+                
+                # Initialize the max value for this state
+                max_value = float('-inf')
+                
+                # Calculate expected value for each action
+                for action in ['L', 'R', 'U', 'D']:
+                    expected_value = 0
+                    if action == 'L':
+                        new_state = (i, max(0, j - 1))
+                    elif action == 'R':
+                        new_state = (i, min(N - 1, j + 1))
+                    elif action == 'U':
+                        new_state = (max(0, i - 1), j)
+                    elif action == 'D':
+                        new_state = (min(N - 1, i + 1), j)
+
+                    # Incorporate probabilities of staying and being blown
+                    expected_value += (0.5 * reward(current_state) +
+                                       0.25 * reward(new_state) + 
+                                       0.25 * reward((i + 1 if action == 'D' else i, j + 1 if action == 'R' else j)))
+
+                    expected_value *= gamma  # Discount the expected value
+                
+                # Update the maximum value for the current state
+                max_value = max(max_value, expected_value)
+                
+                # Update the value matrix
+                V[i][j] = max_value
+                
+                # Calculate the maximum change for convergence
+                delta = max(delta, abs(current_value - V[i][j]))
+
+    return V[0][0]  # Return the value at the starting position
 
 
 #######################################################################################
