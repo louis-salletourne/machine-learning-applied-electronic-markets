@@ -199,64 +199,74 @@ def solve_question_3(N: int, alpha: float, beta: float) -> float:
     Returns:
         Total expected reward under an optimal policy.
     """
-        # Initialize the value matrix for each state
-    V = init_matrix(nrows=N, ncols=N, fill_value=0)
+    # Initialize grid and parameters
+    rewards = init_matrix(nrows=N, ncols=N)
+    rewards[N-1][N-1] = 1    # Goal position reward
+    rewards[N//2][N//2] = -alpha  # Penalty position
+    rewards[N-1][0] = -beta      # Penalty position
+
+    # Discount factor
+    discount = 0.5
     
-    # Define the rewards based on the state
-    def reward(s):
-        if s == (N - 1, N - 1):
-            return 1
-        elif s == (N // 2, N // 2):
-            return -alpha
-        elif s == (N - 1, 0):
-            return -beta
-        else:
-            return 0
+    # Initialize value function with zeros
+    values = init_matrix(nrows=N, ncols=N, fill_value=0.0)
+    threshold = 1e-6  # Convergence threshold
 
-    # Set discount factor
-    gamma = 0.5
+    # Possible actions
+    actions = {
+        'L': (0, -1),   # Left
+        'R': (0, 1),    # Right
+        'D': (1, 0),    # Down
+        'U': (-1, 0)    # Up
+    }
 
-    # Iterative value update until convergence
-    delta = float('inf')
-    while delta > 1e-6:
-        delta = 0
+    # Value iteration loop
+    while True:
+        delta = 0  # Track maximum change for convergence
+        new_values = [row[:] for row in values]  # Copy current values
+
         for i in range(N):
             for j in range(N):
-                current_state = (i, j)
-                current_value = V[i][j]
+                state_value = []
                 
-                # Initialize the max value for this state
-                max_value = float('-inf')
-                
-                # Calculate expected value for each action
-                for action in ['L', 'R', 'U', 'D']:
+                # For each action, calculate expected value
+                for _, (di, dj) in actions.items():
+                    reward = rewards[i][j]  # Reward when leaving this state
                     expected_value = 0
-                    if action == 'L':
-                        new_state = (i, max(0, j - 1))
-                    elif action == 'R':
-                        new_state = (i, min(N - 1, j + 1))
-                    elif action == 'U':
-                        new_state = (max(0, i - 1), j)
-                    elif action == 'D':
-                        new_state = (min(N - 1, i + 1), j)
+                    
+                    # Move in the intended direction first
+                    new_i, new_j = i + di, j + dj
+                    if new_i < 0 or new_i >= N:
+                        new_i = i  # Stay in place if hitting a wall
 
-                    # Incorporate probabilities of staying and being blown
-                    expected_value += (0.5 * reward(current_state) +
-                                       0.25 * reward(new_state) + 
-                                       0.25 * reward((i + 1 if action == 'D' else i, j + 1 if action == 'R' else j)))
+                    if new_j < 0 or new_j >= N:
+                        new_j = j  # Stay in place if hitting a wall
 
-                    expected_value *= gamma  # Discount the expected value
-                
-                # Update the maximum value for the current state
-                max_value = max(max_value, expected_value)
-                
-                # Update the value matrix
-                V[i][j] = max_value
-                
-                # Calculate the maximum change for convergence
-                delta = max(delta, abs(current_value - V[i][j]))
+                    # After moving in the intended direction, consider "blown" movements
+                    
+                    # 50% chance to stay in the new position
+                    expected_value += 0.5 * (reward + discount * values[new_i][new_j])
+                    
+                    # 25% chance to be blown left
+                    blown_left_i, blown_left_j = new_i, max(0, new_j - 1)
+                    expected_value += 0.25 * (reward + discount * values[blown_left_i][blown_left_j])
+                    
+                    # 25% chance to be blown down
+                    blown_down_i, blown_down_j = min(N - 1, new_i + 1), new_j
+                    expected_value += 0.25 * (reward + discount * values[blown_down_i][blown_down_j])
 
-    return V[0][0]  # Return the value at the starting position
+                    state_value.append(expected_value)
+
+                # Update the value for state (i, j) with the max value of all actions
+                new_values[i][j] = max(state_value)
+                delta = max(delta, abs(new_values[i][j] - values[i][j]))
+
+        values = new_values  # Update values
+        if delta < threshold:
+            break  # Converged
+
+    # Return the total expected reward starting from the initial state (0,0)
+    return values[0][0]
 
 
 #######################################################################################
